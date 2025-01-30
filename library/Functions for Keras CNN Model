@@ -1,0 +1,87 @@
+# This function is for creating the list of images with the label (either pneumonia or normal, given the file pathway)
+def file_list(directory, label, targetlist):
+    for file in os.listdir(directory):
+        if file.lower().endswith('.jpeg'):  # Include only .jpeg files
+            targetlist.append([os.path.join(directory, file), label])
+
+# This function is for the preprocessing of the images, changing from rbg --> grayscale and normalizing the pixesl.
+def processingimg(image_path, target_size=(224, 224)):
+    try:
+        img = Image.open(image_path).convert('L')  
+        image_resized = img.resize(target_size)
+        return np.array(image_resized).astype('float32') / 255.0  
+    except Exception as e:
+        print(f"Error processing image {image_path}: {e}")
+        return None
+
+# This functino creates a spark dataframe, calling on the preprocessingimg function
+def compose_dataset_spark(sparkdf, target_size=(224, 224)):
+    images = []
+    labels = []
+
+    for row in sparkdf.collect():
+        img_array = processingimg(row.image, target_size)
+        if img_array is not None:
+            images.append(img_array)
+            labels.append(row.label)
+
+    images = np.array(images).reshape(-1, target_size[0], target_size[1], 1)  # Add channel dimension
+    labels = np.array(labels)
+
+    return images, labels
+
+# To create the cnn model
+def create_model():
+    model = models.Sequential()
+    model.add(layers.Conv2D(32, (3, 3), activation='relu',
+                        input_shape=(224, 224, 1)))
+    model.add(layers.MaxPooling2D((2, 2)))
+
+    model.add(layers.Conv2D(64, (3, 3), activation='relu'))
+    model.add(layers.MaxPooling2D((2, 2)))
+
+    model.add(layers.Conv2D(128, (3, 3), activation='relu'))
+    model.add(layers.MaxPooling2D((2, 2)))
+
+    # 4th Convolution
+    model.add(layers.Conv2D(128, (3, 3), activation='relu'))
+    model.add(layers.MaxPooling2D((2, 2)))
+
+    # Flattened the layer
+    model.add(layers.Flatten())
+
+    # Fully connected layers
+    model.add(layers.Dense(64, activation='relu'))
+    model.add(layers.Dropout(0.5))  
+    model.add(layers.Dense(2, activation='softmax'))
+    return model
+
+
+# To visualize a plot of the accuracy and loss against the epoch number.
+def visualizing_model(history):
+
+    history_dict = history.history
+    train_loss_values = history_dict['loss']
+    val_loss_values = history_dict['val_loss']
+    train_accuracy = history_dict['accuracy']
+    val_accuracy = history_dict['val_accuracy']
+
+    fig, axis = plt.subplots(ncols=1, nrows=2, figsize=(7,7))
+
+    # Loss plot
+    epochs = range(1, len(val_loss_values) + 1)
+    sns.lineplot(ax=axis[0], x=epochs, y=train_loss_values, label='Training Loss')
+    sns.lineplot(ax=axis[0], x=epochs, y=val_loss_values, label='Validation Loss')
+    axis[0].set(xlabel='Epochs', ylabel='Loss')
+    axis[0].set_title('Model Loss', fontsize=20)
+    axis[0].grid(True)  # Correct grid call
+
+    # Accuracy plot
+    sns.lineplot(ax=axis[1], x=epochs, y=train_accuracy, label='Training Accuracy')
+    sns.lineplot(ax=axis[1], x=epochs, y=val_accuracy, label='Validation Accuracy')
+    axis[1].set(xlabel='Epochs', ylabel='Accuracy')
+    axis[1].set_title('Model Accuracy', fontsize=20)
+    axis[1].grid(True)  # Correct grid call
+
+    plt.tight_layout()
+    plt.show()
