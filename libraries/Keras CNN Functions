@@ -1,0 +1,31 @@
+# To sort the images of each file path into the list 
+def file_list(directory, label, targetlist):
+    for file in os.listdir(directory):
+        if file.lower().endswith('.jpeg'):  # Include only .jpeg files
+            targetlist.append([os.path.join(directory, file), label])
+
+# To process the images before they can go into the model. 
+def processingimg(image_path, target_size=(224, 224)):
+    try:
+        img = Image.open(image_path).convert('L')  
+        image_resized = img.resize(target_size)
+        return np.array(image_resized).astype('float32') / 255.0  
+    except Exception as e:
+        print(f"Error processing image {image_path}: {e}")
+        return None
+
+# to make the model into a spark dataset with the images and the 
+def compose_dataset_spark(sparkdf, target_size=(224, 224)):
+    images = []
+    labels = []
+
+    for row in sparkdf.collect():
+        img_array = processingimg(row.image, target_size)
+        if img_array is not None:
+            images.append(img_array)
+            labels.append(row.label)
+
+    images = np.array(images).reshape(-1, target_size[0], target_size[1], 1)  # Add channel dimension
+    labels = np.array(labels)
+
+    return images, labels
