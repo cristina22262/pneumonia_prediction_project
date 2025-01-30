@@ -1,1 +1,4 @@
-
+bigdl-core == 2.4.0
+bigdl-dllib-spark3 == 2.5.0
+pyspark == 3.4.1
+tensorflow == 2.18.0
